@@ -9,6 +9,7 @@ import "./interfaces/IController.sol";
 import "./interfaces/ICakePool.sol";
 import "./interfaces/IPancakeSwapRouter.sol";
 import "./interfaces/IUniswapV2Router02.sol";
+import "./interfaces/IBurn.sol";
 
 contract JetFuelLP is BEP20 {
 
@@ -86,6 +87,17 @@ contract JetFuelLP is BEP20 {
         }
     }
 
+    function _buyTokenMainWithWBNB(uint256 _amount) internal {
+        if(_amount > 0){
+            wbnb.safeApprove(pancakeSwapRouter, 0);
+            wbnb.safeApprove(pancakeSwapRouter, _amount);
+            address[] memory path = new address[](2);
+            path[0] = address(wbnb);
+            path[1] = address(tokenMain);
+            IPancakeSwapRouter(pancakeSwapRouter).swapExactTokensForTokensSupportingFeeOnTransferTokens(_amount, uint256(0), path, address(this), now.add(1800));
+        }
+    }    
+
     function balanceFUEL() public view returns(uint256){
         return cake.balanceOf(address(this));
     }
@@ -103,6 +115,8 @@ contract JetFuelLP is BEP20 {
         if(_amount > 0){
             _convertCakeToWBNB();
             uint256 amountWBNB = wbnb.balanceOf(address(this));
+            uint256 amountForBuy = amountWBNB.mul(20).div(100);
+            amountWBNB = amountWBNB.sub(amountForBuy);
             uint256 tokens_solds = tokensSend(amountWBNB);
             controller.mint(address(this), tokens_solds);
             uint256 tokens_solds_min = tokens_solds.sub(tokens_solds.mul(3).div(100));
@@ -119,9 +133,10 @@ contract JetFuelLP is BEP20 {
                 address(this), // address to,
                 now.add(1800)// uint deadline
             );
+            _buyTokenMainWithWBNB(wbnb.balanceOf(address(this)));
             uint256 _amountTokenMain = tokenMain.balanceOf(address(this));
             if(_amountTokenMain > 0){
-                tokenMain.safeTransfer(address(masterchef.devaddr()), _amountTokenMain);
+                IBurn(address(tokenMain)).burn(_amountTokenMain);
             }
         }
     }
